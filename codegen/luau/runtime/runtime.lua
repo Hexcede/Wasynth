@@ -453,6 +453,8 @@ do
 
 	local reinterpret_f32_i32 = module.reinterpret.f32_i32
 	local reinterpret_f64_i64 = module.reinterpret.f64_i64
+	local reinterpret_i32_f32 = module.reinterpret.i32_f32
+	local reinterpret_i64_f64 = module.reinterpret.i64_f64
 
 	local function load_byte(data, addr)
 		local value = data[math_floor(addr / 4)] or 0
@@ -500,6 +502,20 @@ do
 		end
 	end
 
+	function load.i32_u16(memory, addr)
+		local data = memory.data
+		local num
+
+		if addr % 4 == 0 then
+			return bit_band(data[addr / 4] or 0, 0xFFFF)
+		else
+			local b1 = load_byte(data, addr)
+			local b2 = bit_lshift(load_byte(data, addr + 1), 8)
+
+			return bit_bor(b1, b2)
+		end
+	end
+
 	function load.i32(memory, addr)
 		local data = memory.data
 
@@ -515,6 +531,94 @@ do
 
 			return bit_bor(b1, b2, b3, b4)
 		end
+	end
+
+	function load.i64_i8(memory, addr)
+		local b = load_byte(memory.data, addr)
+
+		if b >= 0x80 then
+			b = to_u32(b - 0x100)
+		end
+
+		return num_from_u32(b, 0)
+	end
+
+	function load.i64_u8(memory, addr)
+		local temp = load_byte(memory.data, addr)
+
+		return num_from_u32(temp, 0)
+	end
+
+	function load.i64_i16(memory, addr)
+		local data = memory.data
+		local num
+
+		if addr % 4 == 0 then
+			num = bit_band(data[addr / 4] or 0, 0xFFFF)
+		else
+			local b1 = load_byte(data, addr)
+			local b2 = bit_lshift(load_byte(data, addr + 1), 8)
+
+			num = bit_bor(b1, b2)
+		end
+
+		if num >= 0x8000 then
+			num = to_u32(num - 0x10000)
+		end
+
+		return num_from_u32(num, 0)
+	end
+
+	function load.i64_u16(memory, addr)
+		local data = memory.data
+		local num
+
+		if addr % 4 == 0 then
+			num = bit_band(data[addr / 4] or 0, 0xFFFF)
+		else
+			local b1 = load_byte(data, addr)
+			local b2 = bit_lshift(load_byte(data, addr + 1), 8)
+
+			num = bit_bor(b1, b2)
+		end
+
+		return num_from_u32(num, 0)
+	end
+
+	function load.i64_i32(memory, addr)
+		local data = memory.data
+		local num
+
+		if addr % 4 == 0 then
+			num = data[addr / 4] or 0
+		else
+			local b1 = load_byte(data, addr)
+			local b2 = bit_lshift(load_byte(data, addr + 1), 8)
+			local b3 = bit_lshift(load_byte(data, addr + 2), 16)
+			local b4 = bit_lshift(load_byte(data, addr + 3), 24)
+
+			num = bit_bor(b1, b2, b3, b4)
+		end
+
+		return num_from_u32(num, 0)
+	end
+
+	function load.i64_u32(memory, addr)
+		local data = memory.data
+		local num
+
+		if addr % 4 == 0 then
+			num = data[addr / 4] or 0
+		else
+			local b1 = load_byte(data, addr)
+			local b2 = bit_lshift(load_byte(data, addr + 1), 8)
+			local b3 = bit_lshift(load_byte(data, addr + 2), 16)
+			local b4 = bit_lshift(load_byte(data, addr + 3), 24)
+
+			num = bit_bor(b1, b2, b3, b4)
+		end
+
+		return num_from_u32(num, 0)
 	end
 
 	local load_i32 = load.i32
@@ -567,12 +671,42 @@ do
 	end
 
 	local store_i32 = store.i32
+	local store_i32_n8 = store.i32_n8
+	local store_i32_n16 = store.i32_n16
+
+	function store.i64_n8(memory, addr, value)
+		local data_1, _ = num_into_u32(value)
+
+		store_i32_n8(memory, addr, data_1)
+	end
+
+	function store.i64_n16(memory, addr, value)
+		local data_1, _ = num_into_u32(value)
+
+		store_i32_n16(memory, addr, data_1)
+	end
+
+	function store.i64_n32(memory, addr, value)
+		local data_1, _ = num_into_u32(value)
+
+		store_i32(memory, addr, data_1)
+	end
 
 	function store.i64(memory, addr, value)
 		local data_1, data_2 = num_into_u32(value)
 
 		store_i32(memory, addr, data_1)
 		store_i32(memory, addr + 4, data_2)
+	end
+
+	local store_i64 = store.i64
+
+	function store.f32(memory, addr, value)
+		store_i32(memory, addr, reinterpret_i32_f32(value))
+	end
+
+	function store.f64(memory, addr, value)
+		store_i64(memory, addr, reinterpret_i64_f64(value))
 	end
 
 	function store.string(memory, offset, data, len)
